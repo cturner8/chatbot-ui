@@ -1,0 +1,11 @@
+services:
+  app:
+    build:
+      context: .
+    networks:
+      - frontend
+      - backend
+
+networks:
+  frontend: {}
+  backend: {}

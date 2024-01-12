@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      target: dev
+    env_file:
+      - .env.local
+    ports:
+      - 3000:3000
+  
+  supabase:
+    build: 
+      context: .
+    command: npx supabase start
+    expose:
+      - "54320-54329"
+    ports:
+      - "54320-54329"
+      # - "54320-54329:54320-54329"
+    networks:
+      - backend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
