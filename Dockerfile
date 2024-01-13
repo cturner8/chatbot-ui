@@ -1,39 +1,69 @@
 # syntax=docker/dockerfile:1
 
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/go/dockerfile-reference/
-
 ARG NODE_VERSION=lts
 
-FROM node:${NODE_VERSION}-alpine as dev
+# FROM node:${NODE_VERSION}-alpine as base
+FROM node:${NODE_VERSION}-slim as base
 
-# Use production node environment by default.
-ENV NODE_ENV development
+# 1. Install dependencies only when needed
+FROM base as deps
+# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
+# RUN apk add --no-cache libc6-compat
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-COPY package*.json .
-
-# Download dependencies as a separate step to take advantage of Docker's caching.
-# Leverage a cache mount to /root/.npm to speed up subsequent builds.
-# Leverage a bind mounts to package.json and package-lock.json to avoid having to copy them into
-# into this layer.
+# Install dependencies based on the preferred package manager
+COPY package.json package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm \
-    # --mount=type=bind,source=package.json,target=package.json \
-    # --mount=type=bind,source=package-lock.json,target=package-lock.json \
     npm ci
-    # npm ci --omit=dev
-    # npm install 
 
-# Run the application as a non-root user.
-# USER node
+# 2. Rebuild the source code only when needed
+FROM base as builder
 
-# Copy the rest of the source files into the image.
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+
 COPY . .
 
-# Expose the port that the application listens on.
+# This will do the trick, use the corresponding env file for each environment
+# -> linting temporarily disabled
+RUN npm run build -- --no-lint 
+
+# 3. Production image, copy all the files and run next
+FROM base as runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY --from=builder /app/public ./public
+
+# Automatically leverage output traces to reduce image size
+# https://nextjs.org/docs/advanced-features/output-file-tracing
+COPY --from=builder --chown=node /app/.next/standalone ./
+COPY --from=builder --chown=node /app/.next/static ./.next/static
+
+USER node
+
 EXPOSE 3000
 
-# Run the application.
-CMD npm run dev
+ENV PORT 3000
+ENV HOSTNAME localhost
+
+CMD ["node", "server.js"]
+
+#4. Development image
+FROM base as dev
+
+WORKDIR /app
+
+ENV NODE_ENV=development
+
+COPY --from=deps /app/node_modules ./node_modules
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

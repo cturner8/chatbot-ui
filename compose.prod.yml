@@ -1,12 +1,12 @@
 services:
   app:
     build: 
-      dockerfile: Prod.Dockerfile
+      target: runner
     env_file:
       - .env.production
     environment:
-      PORT: 80
+      PORT: 9000
     expose:
-      - 80
+      - 9000
     ports:
-      - 80:80
+      - 9000:9000
